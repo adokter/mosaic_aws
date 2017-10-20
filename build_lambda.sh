@@ -15,7 +15,7 @@
 
 usage() { echo "Usage: $0 [-m] [-n <package_name>] [-d <destination_s3_bucket_folder>]" 1>&2; exit 1; }
 MOSAIC=0
-while getopts ":n:d:s" opt; do
+while getopts ":n:d:m" opt; do
   case $opt in
     m)
       echo "will do a mosaic build" >&2
@@ -60,14 +60,17 @@ sudo yum -y upgrade
 # readline is needed for rpy2, and fortran is needed for R
 sudo yum install -y python27-devel python27-pip gcc gcc-c++ readline-devel libgfortran.x86_64 R.x86_64
 # epel packages:
-sudo yum install -y gdal-devel.x86_64 proj-devel.x86_64
+sudo yum install -y gdal-devel.x86_64 proj-devel.x86_64 openssl-devel curl libcurl libcurl-devel libpng proj-epsg libjpeg-devel libxml2-devel
 
 # build survival R function if requested
+
 if [ $MOSAIC == 1 ]; then
     # make sure R can find local directory
-    echo "export R_LIBS=~/HOME/lambda" > .Renviron
+    echo "export R_LIBS=$HOME/lambda/Rlib" > ~/.Renviron
+    echo "options(repos=structure(c(CRAN="https://cran.mtu.edu/")))" >> ~/.Renviron
+    echo ".libPaths(\"$HOME/lambda/Rlib\")" > ~/.Rprofile
     cd /tmp
-    sudo R CMD BATCH ~/install_R_packages.R
+    R CMD BATCH $HOME/mosaic_lambda/install_R_packages.R
 fi
 
 # setup virtualenv and install rpy2. Need version <2.9 for python2.7 support
