@@ -38,49 +38,13 @@ from rpy2 import robjects
 from rpy2.robjects import r
 
 def calculate_survival_stats(times, events, values_by_record):
-    """
-    @param times: time elapsed before the event occurs, or when subject is censored
-    @param events: 1 indicates event was observed; 0 indicates event did not occur
-    @param values_by_record: two dimensional double array.  Each row is the predictor values for a record (ex: gene)
-    @return: array where each element contains the hazard ratio and pvalue for the record
-    """
-    # flatten values of two dimensional array for use by R
-    # in R, matrices are simply an array where you specify number of columns per row
-    flattened_values = [y for row in values_by_record for y in row]
-
-    t = robjects.FloatVector(times)
-    e = robjects.IntVector(events)
-    v = robjects.FloatVector(flattened_values)
-
-    # convert flattened values into an R matrix
-    m = robjects.r['matrix'](v, nrow=len(values_by_record), byrow=True)
+    
+    logging.debug('Calculating stats')
 
     #load R library
-    r('library(survival)')
+    r.source("script.R")
 
-    # assign variables in R
-    r.assign('valuesMatrix', m)
-    r.assign('numSamples', len(times))
-    r.assign('times', t)
-    r.assign('events', e)
-
-    # calculate statistics by applying coxph to each record's values
-    logging.debug('Calculating stats')
-    r("""res <- apply(valuesMatrix,1, function(values) {
-      coxlist = try(coxph(Surv(times,events)~values + cluster(1:numSamples[1])))
-      return(c(summary(coxlist)$coefficients[2], summary(coxlist)$coefficients[6]))
-      })""")
     logging.debug('Done calculating stats')
-
-    # convert results
-    r_res = robjects.r['res']
-    res_iter = iter(r_res)
-    results = []
-    for hazard in res_iter:
-        pval = next(res_iter)
-        results.append({'hazard': hazard, 'pval': pval})
-    return results
-
 
 def lambda_handler(event, context):
     times = event['times']

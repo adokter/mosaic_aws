@@ -13,13 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-usage() { echo "Usage: $0 [-s] [-n <package_name>] [-d <destination_s3_bucket_folder>]" 1>&2; exit 1; }
-SURVIVAL=0
+usage() { echo "Usage: $0 [-m] [-n <package_name>] [-d <destination_s3_bucket_folder>]" 1>&2; exit 1; }
+MOSAIC=0
 while getopts ":n:d:s" opt; do
   case $opt in
     s)
-      echo "will do a survival build" >&2
-      SURVIVAL=1
+      echo "will do a mosaic build" >&2
+      MOSAICL=1
       ;;
     n)
       echo "package name: $OPTARG" >&2
@@ -56,12 +56,14 @@ sudo yum -y upgrade
 # install everything
 # readline is needed for rpy2, and fortran is needed for R
 sudo yum install -y python27-devel python27-pip gcc gcc-c++ readline-devel libgfortran.x86_64 R.x86_64
+sudo yum install -y libgdal-dev libproj-dev
 
 # build survival R function if requested
-if [ $SURVIVAL == 1 ]; then
+if [ $MOSAIC == 1 ]; then
+    # make sure R can find local directory
+    echo "export R_LIBS=~/HOME/lambda" > .Renviron
     cd /tmp
-    wget https://cran.r-project.org/src/contrib/Archive/survival/survival_2.39-4.tar.gz
-    sudo R CMD INSTALL survival_2.39-4.tar.gz
+    sudo R CMD BATCH ~/install_R_packages.R
 fi
 
 # setup virtualenv and install rpy2
@@ -81,6 +83,10 @@ cp /usr/lib64/libquadmath.so.0 $HOME/lambda/lib/
 
 # we also need to grab this one (as we learned from trial and error)
 cp /usr/lib64/liblapack.so.3 $HOME/lambda/lib/
+
+# gdal etc
+cp /usr/lib64/libgdal.so.1 $HOME/lambda/lib/
+cp /usr/lib64/libproj.so.9 $HOME/lambda/lib/
 
 # copy R executable to root of package
 cp $HOME/lambda/bin/exec/R $HOME/lambda/
