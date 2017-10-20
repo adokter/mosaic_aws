@@ -56,6 +56,9 @@ sudo yum -y upgrade
 # install everything
 # readline is needed for rpy2, and fortran is needed for R
 sudo yum install -y python27-devel python27-pip gcc gcc-c++ readline-devel libgfortran.x86_64 R.x86_64
+
+# to install extra packages, we need to enable epel repository
+sudo yum-config-manager --enable epel
 sudo yum install -y libgdal-dev libproj-dev
 
 # build survival R function if requested
