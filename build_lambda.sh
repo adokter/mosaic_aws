@@ -17,9 +17,9 @@ usage() { echo "Usage: $0 [-m] [-n <package_name>] [-d <destination_s3_bucket_fo
 MOSAIC=0
 while getopts ":n:d:s" opt; do
   case $opt in
-    s)
+    m)
       echo "will do a mosaic build" >&2
-      MOSAICL=1
+      MOSAIC=1
       ;;
     n)
       echo "package name: $OPTARG" >&2
