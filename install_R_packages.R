@@ -1,4 +1,4 @@
-lib="/home/ec2-user/lambda/lib"
+lib="/home/ec2-user/lambda/Rlib"
 repos='http://cran.us.r-project.org'
 source("http://bioconductor.org/biocLite.R")
 biocLite("rhdf5",lib=lib)

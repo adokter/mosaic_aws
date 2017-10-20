@@ -69,8 +69,7 @@ if [ $MOSAIC == 1 ]; then
     echo "export R_LIBS=$HOME/lambda/Rlib" > ~/.Renviron
     echo "options(repos=structure(c(CRAN="https://cran.mtu.edu/")))" >> ~/.Renviron
     echo ".libPaths(\"$HOME/lambda/Rlib\")" > ~/.Rprofile
-    cd /tmp
-    R CMD BATCH $HOME/mosaic_lambda/install_R_packages.R
+    bash R CMD BATCH $HOME/mosaic_lambda/install_R_packages.R
 fi
 
 # setup virtualenv and install rpy2. Need version <2.9 for python2.7 support
@@ -79,6 +78,7 @@ pip install "rpy2<2.9"
 
 # create a directory called lambda for our package
 mkdir $HOME/lambda && cd $HOME/lambda
+mkdir Rlib
 # copy R 
 cp -rL /usr/lib64/R/* $HOME/lambda/
 # Use ldd on R executable to find shared libraries, and copy all of the ones that were not already on the box
