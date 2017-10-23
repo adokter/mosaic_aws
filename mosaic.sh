@@ -7,4 +7,4 @@ ID=`sed -n 2p ~/.aws/credentials | awk '{print $3}'`
 KEY=`sed -n 3p ~/.aws/credentials | awk '{print $3}'`
 
 echo $ID
-docker run -ti --rm --env MOSAIC_DATE="$DATE" --env AWS_SECRET_ACCESS_KEY="$KEY" --env AWS_ACCESS_KEY_ID="$ID" adokter/mosaic_aws Rscript /opt/mosaic_aws.R
+docker run --rm --env MOSAIC_DATE="$DATE" --env AWS_SECRET_ACCESS_KEY="$KEY" --env AWS_ACCESS_KEY_ID="$ID" adokter/mosaic_aws Rscript /opt/mosaic_aws.R
