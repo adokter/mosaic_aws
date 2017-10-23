@@ -26,11 +26,10 @@ if(file.exists("~/.aws/credentials")){
 }
 
 #Sys.setenv(MOSAIC_DATE=as.character("2017-10-20 01:00"))
+
 DATE=as.POSIXct(if(Sys.getenv("MOSAIC_DATE")=="") as.character(Sys.time()) else Sys.getenv("MOSAIC_DATE"))
 
 evening.palette <- colorRampPalette(c("#0a0a0a","#1775cb","white"),bias=1.0)(100)
-
-OUTPUTDIR="~/Dropbox/radar/aws_visualisations/realtime"
 
 # minimum number of radars for outputting an image
 RADARS_MIN=120
@@ -369,4 +368,13 @@ garbage=dev.off()
 # upload to S3
 cat(paste("uploading",outputfile),"...")
 success=put_object(outputfile,strftime(DATE,"mosaic/%Y/%m/%d/mosaic_%Y%m%d%H%M.jpg"),"vol2bird",acl="public-read")
+# update the filenames text file
+filenames_local=paste(VPDIR,"/filenames.txt",sep="")
+success=tryCatch(save_object("mosaic/filenames.txt","vol2bird",filenames_local),error=function(x) FALSE)
+if(success==FALSE) cat(paste("starting new filenames.txt"))
+write(strftime(DATE,"%Y/%m/%d/mosaic_%Y%m%d%H%M.jpg"),file=filenames_local,append=TRUE)
+success=put_object(filenames_local,strftime(DATE,"mosaic/filenames.txt"),"vol2bird",acl="public-read")
 cat("done\n")
+#clean up
+unlink(VPDIR,recursive=TRUE)
+
