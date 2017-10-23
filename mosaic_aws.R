@@ -12,21 +12,28 @@ suppressMessages(library(fields,quietly = T))
 library(aws.s3,quietly = T)
 suppressMessages(suppressWarnings(library(dplyr,quietly = T)))
 library(geosphere,quietly = T)
-setwd("~/Dropbox/radar/aws_visualisations/realtime")
+setwd("/opt")
+
+Sys.setenv(TZ="UTC")
 
 VPDIR=paste(tempdir(),"/vp",sep="")
-dir.create(VPDIR)
+suppressWarnings(dir.create(VPDIR))
 
-getkeys=function() read.csv("~/.aws/credentials",sep="=",stringsAsFactors = F,col.names = "key",strip.white=T)
-Sys.setenv(AWS_ACCESS_KEY_ID=getkeys()["aws_access_key_id",])
-Sys.setenv(AWS_SECRET_ACCESS_KEY=getkeys()["aws_secret_access_key",])
-Sys.setenv(TZ="UTC")
-Sys.setenv(MOSAIC_DATE=as.character(Sys.time()-9*3600))
+if(file.exists("~/.aws/credentials")){
+  getkeys=function() read.csv("~/.aws/credentials",sep="=",stringsAsFactors = F,col.names = "key",strip.white=T)
+  Sys.setenv(AWS_ACCESS_KEY_ID=getkeys()["aws_access_key_id",])
+  Sys.setenv(AWS_SECRET_ACCESS_KEY=getkeys()["aws_secret_access_key",])
+}
+
+#Sys.setenv(MOSAIC_DATE=as.character("2017-10-20 01:00"))
+DATE=as.POSIXct(if(Sys.getenv("MOSAIC_DATE")=="") as.character(Sys.time()) else Sys.getenv("MOSAIC_DATE"))
 
 evening.palette <- colorRampPalette(c("#0a0a0a","#1775cb","white"),bias=1.0)(100)
 
-DATE=as.POSIXct(Sys.getenv("MOSAIC_DATE"))
 OUTPUTDIR="~/Dropbox/radar/aws_visualisations/realtime"
+
+# minimum number of radars for outputting an image
+RADARS_MIN=120
 
 ##########################################################
 #  functions
@@ -68,13 +75,15 @@ ipol.vplist = function(vplist,alpha=NA,log=F,alt.min=0, alt.max=Inf,quantity="mt
 }
 
 plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, closedev=T, date.lab='auto',legend.lab="Migration traffic rate [birds/km/h]",col=evening.palette,...){
-  if(!is.na(file)) tiff(file=file, width = 7, height = 5,units="in",res=300,compression='lzw')
+  if(!is.na(file)) jpeg(file=file, width = 3.5, height = 2.5,units="in",res=300,quality=90)
   if(attributes(idw)$log){
-    axislabels=c(parse(text=paste("10^",round(log10(zlim[1]),digits=2),sep="")),parse(text=paste("10^",round(log10(zlim[2]),digits=2),sep="")))
+    axislabels=c(0.05,0.5,2,10,50)
+    axisticks=log10(1000*axislabels)
     zlim=log10(zlim)
   }
   else{
     axislabels=zlim
+    axisticks=axislabels
   }
 
   bg.start=par()$bg
@@ -94,7 +103,7 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
   # plot date
   if(date.lab=='auto') date.lab=attributes(idw)$date
   my.date.lab=tryCatch(format(date.lab,"%d %B %Y %H:%M"),error= function(err) {date.lab})
-  text(usr[1] + xwidth/23, usr[3] + yheight/5, my.date.lab, col=linecol,cex = 11, font=2,pos=4)
+  text(usr[1] + xwidth/23, usr[3] + yheight/5, my.date.lab, col=linecol,cex = 5.5, font=2,pos=4)
 
   # plot logo
   if(!is.na(file)){
@@ -112,17 +121,17 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
              col=col,
              zlim=zlim,
              #smallplot=c(0.014,0.024,0.12,.82), left aligntment
-             smallplot=c(0.05,0.4,0.15,0.16), # bottom allignment
+             smallplot=c(0.05,0.4,0.15,0.165), # bottom allignment
              legend.only=TRUE,
              legend.shrink = 1,
              horizontal=T,
              legend.width=2.5,
              breaks=bins,
-             axis.args=list(at=zlim,fg=linecol, labels=axislabels,
+             axis.args=list(at=axisticks,fg=linecol, labels=axislabels,
                             col.axis=linecol,
-                            cex.axis=5,pos=1,mgp = c(0, 5, 0),
-                            lwd.ticks=2.6),
-             legend.args=list(text=legend.lab, side=1, cex=.7, col=linecol, line=8)
+                            cex.axis=5,pos=1,mgp = c(0, 3, 0),
+                            lwd.ticks=2),
+             legend.args=list(text=legend.lab, side=1, cex=.5, col=linecol, line=8)
   )
   par(bg=bg.start,fg=fg.start,col.axis=fg.start,col.lab=fg.start,col.main=fg.start,col.sub=fg.start)
   if(!is.na(file) && closedev==T) dev.off()
@@ -295,7 +304,7 @@ add_barbs=function(vplist,mtr.min=500,radar.col="white"){
   coordinates(barbdata)<-~lon+lat
   proj4string(barbdata)=proj4string(lower48wgs)
   barbdata=spTransform(barbdata, CRS("+proj=merc"))
-  plot_wind_barbs(barbdata@coords[,1],barbdata@coords[,2],180+barbdata$dd,7+0*barbdata$ff,col="#fca71d",cex=.7,lwd=1.5,arrow=T)
+  plot_wind_barbs(barbdata@coords[,1],barbdata@coords[,2],180+barbdata$dd,3.5+0*barbdata$ff,col="#fca71d",cex=.35,lwd=0.75,arrow=T)
 }
 
 s3file=function(radar,date,bucket="vol2bird",prefix="output",dt=900){
@@ -334,15 +343,17 @@ load("basemap.RData")
 #  download files
 ##########################################################
 setwd(VPDIR)
-print(paste("SCRIPT: making mosaic for",DATE))
+cat(paste("SCRIPT: making mosaic for",DATE,"\n"))
 
 # select and load files
 timer=system.time(keys<-do.call(rbind,lapply(radarInfo$radar,function(x) s3file(x,DATE))))
-print(paste("SCRIPT: selected", nrow(keys), "profiles for download in",round(timer["elapsed"],2),"seconds"))
+cat(paste("SCRIPT: selected", nrow(keys), "profiles for download in",round(timer["elapsed"],2),"seconds\n"))
+# abort if too few radars available
+stopifnot(nrow(keys)>RADARS_MIN)
 timer=system.time(lapply(keys$Key,function(x) save_object(x,bucket="vol2bird",file=basename(x))))
-print(paste("SCRIPT: downloaded profiles to", VPDIR, "in",round(timer["elapsed"],2),"seconds"))
-vps=suppressWarnings(readvp.list(list.files(pattern="*.h5")))
-print(paste("SCRIPT: loaded",length(vps),"profiles in",round(timer["elapsed"],2),"seconds"))
+cat(paste("SCRIPT: downloaded profiles to", VPDIR, "in",round(timer["elapsed"],2),"seconds\n"))
+timer=system.time(vps<-suppressWarnings(readvp.list(list.files(pattern="*.h5"))))
+cat(paste("SCRIPT: loaded",length(vps),"profiles in",round(timer["elapsed"],2),"seconds\n"))
 
 ##########################################################
 #  interpolate
@@ -351,9 +362,11 @@ vps.idw=ipol.vplist(vps,log=T,method="krige")
 # reset the date attribute to the requested value
 attributes(vps.idw)$date=DATE
 # plot to file
-outputfile=paste(OUTPUTDIR,strftime(DATE,"/mosaic_%Y%m%d%H%M.tiff"),sep="")
-plotidw(vps.idw,main="mtr",bg="black",linecol="white",zlim=c(100,30000),file=outputfile,closedev=F)
+outputfile=paste(VPDIR,strftime(DATE,"/mosaic_%Y%m%d%H%M.jpg"),sep="")
+plotidw(vps.idw,main="mtr",bg="black",linecol="white",zlim=c(50,50000),file=outputfile,closedev=F,legend.lab="Migration traffic rate [kbird/km/h]")
 add_barbs(vps)
-dev.off()
+garbage=dev.off()
 # upload to S3
-put_object(outputfile,strftime(DATE,"mosaic/%Y/%m/%d/mosaic_%Y%m%d%H%M.tiff"),"vol2bird",acl="public-read")
+cat(paste("uploading",outputfile),"...")
+success=put_object(outputfile,strftime(DATE,"mosaic/%Y/%m/%d/mosaic_%Y%m%d%H%M.jpg"),"vol2bird",acl="public-read")
+cat("done\n")
