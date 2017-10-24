@@ -25,7 +25,9 @@ if(file.exists("~/.aws/credentials")){
   Sys.setenv(AWS_SECRET_ACCESS_KEY=getkeys()["aws_secret_access_key",])
 }
 
-#Sys.setenv(MOSAIC_DATE=as.character("2017-10-20 01:00"))
+# run below lines when testing locally:
+# Sys.setenv(MOSAIC_DATE=as.character("2017-10-24 00:40"))
+# setwd("~/git/mosaic_aws")
 
 DATE=as.POSIXct(if(Sys.getenv("MOSAIC_DATE")=="") as.character(Sys.time()) else Sys.getenv("MOSAIC_DATE"))
 
@@ -38,7 +40,7 @@ RADARS_MIN=120
 #  functions
 ##########################################################
 
-ipol.vplist = function(vplist,alpha=NA,log=F,alt.min=0, alt.max=Inf,quantity="mtr",method="idw"){
+ipol.vplist = function(vplist,alpha=NA,log=F,alt.min=0, alt.max=Inf,quantity="mtr",method="idw",variogram='auto'){
   if(!(method %in% c("idw","krige"))) stop("unknown interpolation method")
   if(!(quantity %in% c("mtr","u","v","ff","dd","HGHT"))) stop("unknown quantity")
   radar=sapply(vplist, function(x) x$radar)
@@ -62,7 +64,12 @@ ipol.vplist = function(vplist,alpha=NA,log=F,alt.min=0, alt.max=Inf,quantity="mt
     else g <- gstat(id="var1", formula=mtrs ~ 1, data=data)
     # interpolate the densities
     vario.mtr=variogram(g, map=FALSE)
-    vario.fit <- fit.variogram(vario.mtr, model=vgm(model='Sph'))
+    if(inherits(variogram,"variogramModel")){
+      vario.fit=variogram 
+    }
+    else{
+      vario.fit <- fit.variogram(vario.mtr, model=vgm(model='Sph'))
+    }
     g <- gstat(g, id="var1", model=vario.fit )
     ipol <- predict(g, newdata=r)
   }
@@ -102,7 +109,7 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
   # plot date
   if(date.lab=='auto') date.lab=attributes(idw)$date
   my.date.lab=tryCatch(format(date.lab,"%d %B %Y %H:%M"),error= function(err) {date.lab})
-  text(usr[1] + xwidth/23, usr[3] + yheight/5, my.date.lab, col=linecol,cex = 5.5, font=2,pos=4)
+  text(usr[1] + xwidth/23, usr[3] + yheight/5, my.date.lab, col=linecol,cex = 6, font=2,pos=4)
 
   # plot logo
   if(!is.na(file)){
@@ -113,8 +120,18 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
 
   bins=seq(zlim[1],zlim[2],length.out=length(col)+1)
 
-  # plot radar locations
-  plot(attributes(idw)$data.vp,add=T,col=linecol,lwd=0.1,pch='.')
+  
+  
+  # plot radar locations of active radars
+  plot(attributes(idw)$data.vp,add=T,col='green',cex=1.5,pch=16)
+  # also plot inactive radars
+  radarsOffline=radarInfo[!(1:nrow(radarInfo) %in% as.numeric(rownames(attributes(idw)$data.vp@data))),]
+  if(nrow(radarsOffline)>0){
+    coordinates(radarsOffline)<-~lon+lat
+    proj4string(radarsOffline)=proj4string(lower48wgs)
+    radarsOffline=spTransform(radarsOffline, CRS("+proj=merc"))
+    plot(radarsOffline,add=T,col='red',cex=1.5,pch=16)
+  }
 
   image.plot(idw,
              col=col,
@@ -128,9 +145,9 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
              breaks=bins,
              axis.args=list(at=axisticks,fg=linecol, labels=axislabels,
                             col.axis=linecol,
-                            cex.axis=5,pos=1,mgp = c(0, 3, 0),
+                            cex.axis=4,pos=1,mgp = c(0, 3, 0),
                             lwd.ticks=2),
-             legend.args=list(text=legend.lab, side=1, cex=.5, col=linecol, line=8)
+             legend.args=list(text=legend.lab, side=1, cex=.4, col=linecol, line=8)
   )
   par(bg=bg.start,fg=fg.start,col.axis=fg.start,col.lab=fg.start,col.main=fg.start,col.sub=fg.start)
   if(!is.na(file) && closedev==T) dev.off()
@@ -336,7 +353,10 @@ s3file=function(radar,date,bucket="vol2bird",prefix="output",dt=900){
 #logo <- readPNG("~/Dropbox/radar/NEXRAD/fullcontinent/logo/CL_logo_stack_RGB_inv.png")
 #res <- dim(logo)[1:2]
 #save(lower48,lower48wgs,radarInfo,r,idw.idx,logo,res,file="basemap.RData")
+# load basemap and radarInfo
 load("basemap.RData")
+# load variogram model for interpolation
+load("vgModel.RData")
 
 ##########################################################
 #  download files
@@ -357,12 +377,13 @@ cat(paste("SCRIPT: loaded",length(vps),"profiles in",round(timer["elapsed"],2),"
 ##########################################################
 #  interpolate
 ##########################################################
-vps.idw=ipol.vplist(vps,log=T,method="krige")
+# we interpolate with static variogram model, to avoid occasional singularities in variogram fit
+vps.idw=ipol.vplist(vps,log=T,method="krige",variogram=vgModel)
 # reset the date attribute to the requested value
 attributes(vps.idw)$date=DATE
 # plot to file
 outputfile=paste(VPDIR,strftime(DATE,"/mosaic_%Y%m%d%H%M.jpg"),sep="")
-plotidw(vps.idw,main="mtr",bg="black",linecol="white",zlim=c(50,50000),file=outputfile,closedev=F,legend.lab="Migration traffic rate [kbird/km/h]")
+plotidw(vps.idw,main="mtr",bg="black",linecol="white",zlim=c(50,50000),file=outputfile,closedev=F,legend.lab="Migration traffic rate [thousands/km/h]",variogram=vgModel)
 add_barbs(vps)
 garbage=dev.off()
 # upload to S3
