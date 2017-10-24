@@ -396,13 +396,13 @@ success=put_object(outputfile,strftime(DATE,"mosaic/%Y/%m/%d/mosaic_%Y%m%d%H%M.j
 filenames_local=paste(VPDIR,"/filenames.txt",sep="")
 # if after 22 UTC, we group the file with the next day
 if(as.numeric(strftime(DATE, format="%H"))>=HOUR_NEW_DAY){
-  filenames_remote=strftime(DATE+24*3600,"%Y/%m/%d/filenames.txt")
-} else filenames_remote=strftime(DATE,"%Y/%m/%d/filenames.txt")
+  filenames_remote=strftime(DATE+24*3600,"mosaic/%Y/%m/%d/filenames.txt")
+} else filenames_remote=strftime(DATE,"mosaic/%Y/%m/%d/filenames.txt")
 # try to grab the filenames.txt form S3
-success=tryCatch(save_object("mosaic/filenames.txt","vol2bird",filenames_local),error=function(x) FALSE)
+success=tryCatch(save_object(filenames_remote,"vol2bird",filenames_local),error=function(x) FALSE)
 if(success==FALSE) cat(paste("starting new filenames.txt"))
 write(strftime(DATE,"%Y/%m/%d/mosaic_%Y%m%d%H%M.jpg"),file=filenames_local,append=TRUE)
-success=put_object(filenames_local,strftime(DATE,"mosaic/filenames.txt"),"vol2bird",acl="public-read")
+success=put_object(filenames_local,filenames_remote,"vol2bird",acl="public-read")
 cat("done\n")
 #clean up
 unlink(VPDIR,recursive=TRUE)
