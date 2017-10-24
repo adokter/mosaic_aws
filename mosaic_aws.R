@@ -31,6 +31,9 @@ if(file.exists("~/.aws/credentials")){
 
 DATE=as.POSIXct(if(Sys.getenv("MOSAIC_DATE")=="") as.character(Sys.time()) else Sys.getenv("MOSAIC_DATE"))
 
+# UTC hour at which we transition to a new day for grouping radar files
+HOUR_NEW_DAY=22
+
 evening.palette <- colorRampPalette(c("#0a0a0a","#1775cb","white"),bias=1.0)(100)
 
 # minimum number of radars for outputting an image
@@ -391,6 +394,11 @@ cat(paste("uploading",outputfile),"...")
 success=put_object(outputfile,strftime(DATE,"mosaic/%Y/%m/%d/mosaic_%Y%m%d%H%M.jpg"),"vol2bird",acl="public-read")
 # update the filenames text file
 filenames_local=paste(VPDIR,"/filenames.txt",sep="")
+# if before 22 UTC, we group the file with the previous day
+if(as.numeric(strftime(DATE, format="%H"))>=HOUR_NEW_DAY){
+  filenames_remote=strftime(DATE,"%Y/%m/%d/filenames.txt")
+} else filenames_remote=strftime(DATE-24*3600,"%Y/%m/%d/filenames.txt")
+# try to grab the filenames.txt form S3
 success=tryCatch(save_object("mosaic/filenames.txt","vol2bird",filenames_local),error=function(x) FALSE)
 if(success==FALSE) cat(paste("starting new filenames.txt"))
 write(strftime(DATE,"%Y/%m/%d/mosaic_%Y%m%d%H%M.jpg"),file=filenames_local,append=TRUE)
@@ -398,4 +406,3 @@ success=put_object(filenames_local,strftime(DATE,"mosaic/filenames.txt"),"vol2bi
 cat("done\n")
 #clean up
 unlink(VPDIR,recursive=TRUE)
-
