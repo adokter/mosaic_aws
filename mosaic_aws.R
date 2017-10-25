@@ -402,7 +402,10 @@ if(as.numeric(strftime(DATE, format="%H"))>=HOUR_NEW_DAY){
 success=tryCatch(save_object(filenames_remote,"vol2bird",filenames_local),error=function(x) FALSE)
 if(success==FALSE) cat(paste("starting new filenames.txt"))
 write(strftime(DATE,"%Y/%m/%d/mosaic_%Y%m%d%H%M.jpg"),file=filenames_local,append=TRUE)
+# put a copy filenames.txt down the date tree
 success=put_object(filenames_local,filenames_remote,"vol2bird",acl="public-read")
+# also put a copy at the root
+success=put_object(filenames_local,"mosaic/filenames.txt","vol2bird",acl="public-read")
 cat("done\n")
 #clean up
 unlink(VPDIR,recursive=TRUE)
