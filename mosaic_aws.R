@@ -1,3 +1,40 @@
+#!/usr/bin/env Rscript
+args = commandArgs(trailingOnly=TRUE)
+
+##########################################################
+#  parsing arguments
+##########################################################
+
+if("--help" %in% args){
+  cat("mosaic_aws.R [--help] [--suppress-aws-uploads] [--outputdir=<directory>] [--date=<UTC date>]\n")
+  cat("   --help                     print this help screen\n")
+  cat("   --suppress_uploads         do not store generated imagery in Amazon S3\n")
+  cat("   --outputdir=<dir>          optional directory for storing generated imagery\n")
+  cat("   --date=<date>              force processing this UTC date\n")
+  quit()
+}
+
+# determine whether we will upload to S3
+S3UPLOAD = !("--suppress_uploads" %in% args)
+cat("SCRIPT: ","uploading imagery to S3:",S3UPLOAD,'\n')
+
+# get optional path for storing imagery locally
+FIGDIR=args[grep("--outputdir=*",args)]
+FIGDIR=sub("--outputdir=","",FIGDIR)
+if(length(FIGDIR)!=0) if(!file.exists(FIGDIR)) stop("outputdir not found")
+
+# get forced date if specified
+DATEFORCED=args[grep("--date=*",args)]
+DATEFORCED=sub("--date=","",DATEFORCED)
+if(length(DATEFORCED)!=0){
+  d <- try( as.Date(DATEFORCED, format= "%Y-%m-%d %H:%M" ) )
+  if( class( d ) == "try-error" || is.na( d ) ) stop("date not in 'YYYY-mm-dd HH:MM' format")
+}
+
+# make temporary folder for downloading vp data
+VPDIR=paste(tempdir(),"/vp",sep="")
+suppressWarnings(dir.create(VPDIR))
+
 ##########################################################
 #  setup environment
 ##########################################################
@@ -13,12 +50,14 @@ library(aws.s3,quietly = T)
 suppressMessages(suppressWarnings(library(dplyr,quietly = T)))
 library(geosphere,quietly = T)
 library(gstat, quietly = T)
-setwd("/opt")
+if(length(FIGDIR)==0){
+  setwd("/opt")
+}
 
 Sys.setenv(TZ="UTC")
 
-VPDIR=paste(tempdir(),"/vp",sep="")
-suppressWarnings(dir.create(VPDIR))
+# S3 bucket where profiles and imagery are stored
+BUCKET="vol2bird"
 
 if(file.exists("~/.aws/credentials")){
   getkeys=function() read.csv("~/.aws/credentials",sep="=",stringsAsFactors = F,col.names = "key",strip.white=T)
@@ -31,6 +70,7 @@ if(file.exists("~/.aws/credentials")){
 # setwd("~/git/mosaic_aws")
 
 DATE=as.POSIXct(if(Sys.getenv("MOSAIC_DATE")=="") as.character(Sys.time()) else Sys.getenv("MOSAIC_DATE"))
+if(length(DATEFORCED)!=0) DATE=as.POSIXct(DATEFORCED)
 
 # UTC hour at which we transition to a new day for grouping radar files
 HOUR_NEW_DAY=22
@@ -327,7 +367,7 @@ add_barbs=function(vplist,mtr.min=500,radar.col="white"){
   plot_wind_barbs(barbdata@coords[,1],barbdata@coords[,2],180+barbdata$dd,3.5+0*barbdata$ff,col="#fca71d",cex=.35,lwd=0.75,arrow=T)
 }
 
-s3file=function(radar,date,bucket="vol2bird",prefix="output",dt=900){
+s3file=function(radar,date,bucket=BUCKET,prefix="output",dt=900){
   keyprefix1=paste(prefix,strftime(date,format="/%Y/%m/%d/"),radar,"/",radar,strftime(date+dt,format="%Y%m%d_%H"),sep="")
   keyprefix2=paste(prefix,strftime(date-dt,format="/%Y/%m/%d/"),radar,"/",radar,strftime(date-dt,format="%Y%m%d_%H"),sep="")
   if(keyprefix1==keyprefix2) keys=get_bucket_df(bucket,keyprefix1,max=Inf)
@@ -462,7 +502,7 @@ terminator <- function(time, from = -180, to = 180, by = 0.1) {
 get_terminator=function(date){
   data=terminator(date, -180, 180, 0.1)
   # the terminator function grabbed from https://github.com/JoGall/terminator/blob/master/terminator.R has
-  # latitude and longitude swapped.
+  # latitude and longitude erroneously swapped.
   data$lon2=data$lat
   data$lat2=data$lon
   data$lon=data$lon2
@@ -501,6 +541,7 @@ load("vgModel.RData")
 ##########################################################
 #  download files
 ##########################################################
+
 setwd(VPDIR)
 cat(paste("SCRIPT: making mosaic for",DATE,"\n"))
 # select and load files
@@ -508,13 +549,13 @@ timer=system.time(keys<-do.call(rbind,lapply(radarInfo$radar,function(x) s3file(
 cat(paste("SCRIPT: selected", nrow(keys), "profiles for download in",round(timer["elapsed"],2),"seconds\n"))
 # abort if too few radars available
 stopifnot(nrow(keys)>RADARS_MIN)
-timer=system.time(lapply(keys$Key,function(x) save_object(x,bucket="vol2bird",file=basename(x))))
+timer=system.time(lapply(keys$Key,function(x) save_object(x,bucket=BUCKET,file=basename(x))))
 cat(paste("SCRIPT: downloaded profiles to", VPDIR, "in",round(timer["elapsed"],2),"seconds\n"))
 timer=system.time(vps<-suppressWarnings(readvp.list(list.files(pattern="*.h5"))))
 cat(paste("SCRIPT: loaded",length(vps),"profiles in",round(timer["elapsed"],2),"seconds\n"))
 
 ##########################################################
-#  interpolate
+#  interpolate and plot
 ##########################################################
 
 # we interpolate with static variogram model, to avoid occasional singularities in variogram fit
@@ -529,23 +570,33 @@ add_barbs(vps)
 term=get_terminator(DATE)
 if(!is.null(term)) points(term@coords[,1],term@coords[,2],col='yellow',type='l',lwd=2)
 garbage=dev.off()
-# upload to S3
-cat(paste("uploading",outputfile),"...")
-success=put_object(outputfile,strftime(DATE,"mosaic/%Y/%m/%d/mosaic_%Y%m%d%H%M.jpg"),"vol2bird",acl="public-read")
-# update the filenames text file
-filenames_local=paste(VPDIR,"/filenames.txt",sep="")
-# if after 22 UTC, we group the file with the next day
-if(as.numeric(strftime(DATE, format="%H"))>=HOUR_NEW_DAY){
-  filenames_remote=strftime(DATE+24*3600,"mosaic/%Y/%m/%d/filenames.txt")
-} else filenames_remote=strftime(DATE,"mosaic/%Y/%m/%d/filenames.txt")
-# try to grab the filenames.txt form S3
-success=tryCatch(save_object(filenames_remote,"vol2bird",filenames_local),error=function(x) FALSE)
-if(success==FALSE) cat(paste("starting new filenames.txt"))
-write(strftime(DATE,"%Y/%m/%d/mosaic_%Y%m%d%H%M.jpg"),file=filenames_local,append=TRUE)
-# put a copy filenames.txt down the date tree
-success=put_object(filenames_local,filenames_remote,"vol2bird",acl="public-read")
-# also put a copy at the root
-success=put_object(filenames_local,"mosaic/filenames.txt","vol2bird",acl="public-read")
-cat("done\n")
+
+##########################################################
+#  upload to S3
+##########################################################
+
+if(S3UPLOAD){
+  cat(paste("uploading",outputfile),"...")
+  success=put_object(outputfile,strftime(DATE,"mosaic/%Y/%m/%d/mosaic_%Y%m%d%H%M.jpg"),BUCKET,acl="public-read")
+  # update the filenames text file
+  filenames_local=paste(VPDIR,"/filenames.txt",sep="")
+  # if after 22 UTC, we group the file with the next day
+  if(as.numeric(strftime(DATE, format="%H"))>=HOUR_NEW_DAY){
+    filenames_remote=strftime(DATE+24*3600,"mosaic/%Y/%m/%d/filenames.txt")
+  } else filenames_remote=strftime(DATE,"mosaic/%Y/%m/%d/filenames.txt")
+  # try to grab the filenames.txt from S3
+  success=tryCatch(save_object(filenames_remote,BUCKET,filenames_local),error=function(x) FALSE)
+  if(success==FALSE) cat(paste("starting new filenames.txt"))
+  write(strftime(DATE,"%Y/%m/%d/mosaic_%Y%m%d%H%M.jpg"),file=filenames_local,append=TRUE)
+  # put a copy filenames.txt down the date tree
+  success=put_object(filenames_local,filenames_remote,BUCKET,acl="public-read")
+  # also put a copy at the root
+  success=put_object(filenames_local,"mosaic/filenames.txt",BUCKET,acl="public-read")
+  cat("done\n")
+}
+
+#copy imagery to optional local directory
+if(length(FIGDIR)!=0) file.copy(outputfile,paste(FIGDIR,"/",basename(outputfile),sep=""))
+
 #clean up
 unlink(VPDIR,recursive=TRUE)
