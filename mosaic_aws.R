@@ -12,6 +12,7 @@ suppressMessages(library(fields,quietly = T))
 library(aws.s3,quietly = T)
 suppressMessages(suppressWarnings(library(dplyr,quietly = T)))
 library(geosphere,quietly = T)
+library(gstat, quietly = T)
 setwd("/opt")
 
 Sys.setenv(TZ="UTC")
@@ -340,6 +341,142 @@ s3file=function(radar,date,bucket="vol2bird",prefix="output",dt=900){
 }
 
 ##########################################################
+# calculate day/night terminator
+# from https://github.com/JoGall/terminator/blob/master/terminator.R
+##########################################################
+
+# ADDS A TERMINATOR TO A MAP TO SHOW DAYTIME / NIGHTTIME REGIONS
+# Returns a dataframe of latitude and longitude for the line that separates illuminated day and dark night for any given time
+# This is just a port of the Javascript Leaflet.Terminator plugin (https://github.com/joergdietrich/Leaflet.Terminator/blob/master/L.Terminator.js)
+
+rad2deg <- function(rad) {
+  (rad * 180) / (pi)
+}
+
+deg2rad <- function(deg) {
+  (deg * pi) / (180)
+}
+
+getJulian <- function(time) {
+  # get Julian day (number of days since noon on January 1, 4713 BC; 2440587.5 is number of days between Julian epoch and UNIX epoch)
+  (as.integer(time) / 86400) + 2440587.5
+}
+
+getGMST <- function(jDay) {
+  # calculate Greenwich Mean Sidereal Time
+  d <- jDay - 2451545.0
+  (18.697374558 + 24.06570982441908 * d) %% 24
+}
+
+sunEclipticPosition <- function(jDay) {
+  # compute the position of the Sun in ecliptic coordinates
+  # days since start of J2000.0
+  n <- jDay - 2451545.0
+  # mean longitude of the Sun
+  L <- 280.460 + 0.9856474 * n
+  L = L %% 360
+  # mean anomaly of the Sun
+  g <- 357.528 + 0.9856003 * n
+  g = g %% 360
+  # ecliptic longitude of Sun
+  lambda <- L + 1.915 * sin(deg2rad(g)) + 0.02 * sin(2 * deg2rad(g))
+  # distance from Sun in AU
+  R <- 1.00014 - 0.01671 * cos(deg2rad(g)) - 0.0014 * cos(2 * deg2rad(g))
+  
+  data.frame(lambda, R)
+}
+
+eclipticObliquity <- function(jDay) {
+  # compute ecliptic obliquity
+  n <- jDay - 2451545.0
+  # Julian centuries since J2000.0
+  T <- n / 36525
+  # compute epsilon
+  23.43929111 -
+    T * (46.836769 / 3600
+         - T * (0.0001831 / 3600
+                + T * (0.00200340 / 3600
+                       - T * (0.576e-6 / 3600
+                              - T * 4.34e-8 / 3600))))
+}
+
+sunEquatorialPosition <- function(sunEclLng, eclObliq) {
+  # compute the Sun's equatorial position from its ecliptic position
+  alpha <- rad2deg(atan(cos(deg2rad(eclObliq)) *
+                          tan(deg2rad(sunEclLng))))
+  delta <- rad2deg(asin(sin(deg2rad(eclObliq)) 
+                        * sin(deg2rad(sunEclLng))))
+  
+  lQuadrant  = floor(sunEclLng / 90) * 90
+  raQuadrant = floor(alpha / 90) * 90
+  alpha = alpha + (lQuadrant - raQuadrant)
+  
+  data.frame(alpha, delta)
+}
+
+hourAngle <- function(lng, sunPos, gst) {
+  # compute the hour angle of the sun for a longitude on Earth
+  lst <- gst + lng / 15
+  lst * 15 - sunPos$alpha
+}
+
+longitude <- function(ha, sunPos) {
+  # for a given hour angle and sun position, compute the latitude of the terminator
+  rad2deg(atan(-cos(deg2rad(ha)) / tan(deg2rad(sunPos$delta))))
+}
+
+terminator <- function(time, from = -180, to = 180, by = 0.1) {
+  # calculate latitude and longitude of terminator within specified range using time (in POSIXct format, e.g. `Sys.time()`)
+  jDay = getJulian(time)
+  gst = getGMST(jDay)
+  
+  sunEclPos = sunEclipticPosition(jDay)
+  eclObliq = eclipticObliquity(jDay)
+  sunEqPos = sunEquatorialPosition(sunEclPos$lambda, eclObliq)
+  
+  lapply(seq(from, to, by), function(i) {
+    ha = hourAngle(i, sunEqPos, gst)
+    lon = longitude(ha, sunEqPos)
+    data.frame(lat = i, lon)
+  }) %>%
+    plyr::rbind.fill()
+}
+
+# # EXAMPLES
+# # terminator for current time on world map
+#
+# # add terminator at current time to world map as shaded region using `geom_ribbon``
+# ggplot2::ggplot() +
+#   borders("world", colour = "gray90", fill = "gray85") +
+#   geom_ribbon(data = terminator(Sys.time(), -180, 190), aes(lat, ymax = lon), ymin = 90, alpha = 0.2) +
+#   coord_equal() +
+#   ggthemes::theme_map()
+# 
+# # add terminator at a specific time to map of Europe, using a `coord_*` function to crop after drawing shaded region with `geom_ribbon`
+# ggplot2::ggplot() +
+#   borders("world", colour = "gray90", fill = "gray85") +
+#   geom_ribbon(data = terminator(as.POSIXct("2018-01-01 07:00:00 GMT"), -180, 190, 0.1), aes(lat, ymax = lon), ymin = 90, alpha = 0.2) +
+#   coord_equal(xlim = c(35, -12), ylim = c(35, 72), expand = 0) +
+#   ggthemes::theme_map()
+
+get_terminator=function(date){
+  data=terminator(date, -180, 180, 0.1)
+  # the terminator function grabbed from https://github.com/JoGall/terminator/blob/master/terminator.R has
+  # latitude and longitude swapped.
+  data$lon2=data$lat
+  data$lat2=data$lon
+  data$lon=data$lon2
+  data$lat=data$lat2
+  data=data %>% filter(lat >= 27 & lat <= 50 & lon > -150 & lon < -50)
+  if(!nrow(data)>2) return(NULL)
+  coordinates(data)<-~lon+lat
+  proj4string(data)=proj4string(lower48wgs)
+  # convert to mercator projection
+  data=spTransform(data, CRS("+proj=merc"))
+  data
+}
+
+##########################################################
 #  load basemap (code commented out, load from .RData file)
 ##########################################################
 #load("~/Dropbox/radar/NEXRAD/occultation/NEXRAD_ground_antenna_height.RData")
@@ -366,7 +503,6 @@ load("vgModel.RData")
 ##########################################################
 setwd(VPDIR)
 cat(paste("SCRIPT: making mosaic for",DATE,"\n"))
-
 # select and load files
 timer=system.time(keys<-do.call(rbind,lapply(radarInfo$radar,function(x) s3file(x,DATE))))
 cat(paste("SCRIPT: selected", nrow(keys), "profiles for download in",round(timer["elapsed"],2),"seconds\n"))
@@ -380,6 +516,7 @@ cat(paste("SCRIPT: loaded",length(vps),"profiles in",round(timer["elapsed"],2),"
 ##########################################################
 #  interpolate
 ##########################################################
+
 # we interpolate with static variogram model, to avoid occasional singularities in variogram fit
 vps.idw=ipol.vplist(vps,log=T,method="krige",variogram=vgModel)
 # reset the date attribute to the requested value
@@ -388,6 +525,9 @@ attributes(vps.idw)$date=DATE
 outputfile=paste(VPDIR,strftime(DATE,"/mosaic_%Y%m%d%H%M.jpg"),sep="")
 plotidw(vps.idw,main="mtr",bg="black",linecol="white",zlim=c(50,50000),file=outputfile,closedev=F,legend.lab="Migration traffic rate [thousands/km/h]",variogram=vgModel)
 add_barbs(vps)
+# add day-night terminator
+term=get_terminator(DATE)
+if(!is.null(term)) points(term@coords[,1],term@coords[,2],col='yellow',type='l',lwd=2)
 garbage=dev.off()
 # upload to S3
 cat(paste("uploading",outputfile),"...")
