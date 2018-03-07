@@ -109,7 +109,7 @@ ipol.vplist = function(vplist,alpha=NA,log=F,alt.min=0, alt.max=Inf,quantity="mt
     # interpolate the densities
     vario.mtr=variogram(g, map=FALSE)
     if(inherits(variogram,"variogramModel")){
-      vario.fit=variogram 
+      vario.fit=variogram
     }
     else{
       vario.fit <- fit.variogram(vario.mtr, model=vgm(model='Sph'))
@@ -164,8 +164,8 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
 
   bins=seq(zlim[1],zlim[2],length.out=length(col)+1)
 
-  
-  
+
+
   # plot radar locations of active radars
   plot(attributes(idw)$data.vp,add=T,col='green',cex=1.5,pch=16)
   # also plot inactive radars
@@ -422,7 +422,7 @@ sunEclipticPosition <- function(jDay) {
   lambda <- L + 1.915 * sin(deg2rad(g)) + 0.02 * sin(2 * deg2rad(g))
   # distance from Sun in AU
   R <- 1.00014 - 0.01671 * cos(deg2rad(g)) - 0.0014 * cos(2 * deg2rad(g))
-  
+
   data.frame(lambda, R)
 }
 
@@ -444,13 +444,13 @@ sunEquatorialPosition <- function(sunEclLng, eclObliq) {
   # compute the Sun's equatorial position from its ecliptic position
   alpha <- rad2deg(atan(cos(deg2rad(eclObliq)) *
                           tan(deg2rad(sunEclLng))))
-  delta <- rad2deg(asin(sin(deg2rad(eclObliq)) 
+  delta <- rad2deg(asin(sin(deg2rad(eclObliq))
                         * sin(deg2rad(sunEclLng))))
-  
+
   lQuadrant  = floor(sunEclLng / 90) * 90
   raQuadrant = floor(alpha / 90) * 90
   alpha = alpha + (lQuadrant - raQuadrant)
-  
+
   data.frame(alpha, delta)
 }
 
@@ -469,11 +469,11 @@ terminator <- function(time, from = -180, to = 180, by = 0.1) {
   # calculate latitude and longitude of terminator within specified range using time (in POSIXct format, e.g. `Sys.time()`)
   jDay = getJulian(time)
   gst = getGMST(jDay)
-  
+
   sunEclPos = sunEclipticPosition(jDay)
   eclObliq = eclipticObliquity(jDay)
   sunEqPos = sunEquatorialPosition(sunEclPos$lambda, eclObliq)
-  
+
   lapply(seq(from, to, by), function(i) {
     ha = hourAngle(i, sunEqPos, gst)
     lon = longitude(ha, sunEqPos)
@@ -491,7 +491,7 @@ terminator <- function(time, from = -180, to = 180, by = 0.1) {
 #   geom_ribbon(data = terminator(Sys.time(), -180, 190), aes(lat, ymax = lon), ymin = 90, alpha = 0.2) +
 #   coord_equal() +
 #   ggthemes::theme_map()
-# 
+#
 # # add terminator at a specific time to map of Europe, using a `coord_*` function to crop after drawing shaded region with `geom_ribbon`
 # ggplot2::ggplot() +
 #   borders("world", colour = "gray90", fill = "gray85") +
@@ -507,7 +507,7 @@ get_terminator=function(date){
   data$lat2=data$lon
   data$lon=data$lon2
   data$lat=data$lat2
-  data=data %>% filter(lat >= 27 & lat <= 50 & lon > -150 & lon < -50)
+  data=data %>% filter(lat >= 29.5 & lat <= 49 & lon > -150 & lon < -49)
   if(!nrow(data)>2) return(NULL)
   coordinates(data)<-~lon+lat
   proj4string(data)=proj4string(lower48wgs)
