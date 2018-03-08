@@ -152,9 +152,12 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
 
   # plot date
   if(date.lab=='auto') date.lab=attributes(idw)$date
-  my.date.lab=tryCatch(format(date.lab,"%d %B %Y %H:%M"),error= function(err) {date.lab})
-  text(usr[1] + xwidth/23, usr[3] + yheight/5, my.date.lab, col=linecol,cex = 6, font=2,pos=4)
+  my.date.lab=tryCatch(format(date.lab,"%d %B %Y %H:%M EST", tz="EST"),error= function(err) {date.lab})
+  text(usr[1] + xwidth/26, usr[3] + yheight/6, my.date.lab, col=linecol,cex = 6, font=2,pos=4)
 
+  # plot low-medium-high label
+  text(usr[1] + xwidth/26, usr[3] + yheight/8, "                         low       medium       high", col=linecol,cex = 4,pos=4)
+  
   # plot logo
   if(!is.na(file)){
     rasterImage(logo, usr[2]+usr[2]/5.5, usr[3] + (yheight * 0.1) + yheight/20,
@@ -162,6 +165,9 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
                 usr[3] + yheight/20, interpolate=FALSE,angle=180)
   }
 
+  # plot authorship
+  text(usr[1] + xwidth/1.25, usr[3] + yheight/10, "Adriaan M. Dokter, 2018", col=linecol,cex = 3,pos=4)
+    
   bins=seq(zlim[1],zlim[2],length.out=length(col)+1)
 
 
@@ -177,11 +183,27 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
     plot(radarsOffline,add=T,col='red',cex=1.5,pch=16)
   }
 
+  # add day-night terminator
+  term=get_terminator(DATE)
+  if(!is.null(term)){
+    points(term@coords[,1],term@coords[,2],col='yellow',type='l',lwd=2)
+  }
+  
+  # plot active / inactive radar legend
+  points(-10600000,2750000,col='green',cex=1.5,pch=16)
+  points(-10600000,2600000,col='red',cex=1.5,pch=16)
+  text(-10500000, 2750000, "radar active", col=linecol,cex = 4,pos=4)
+  text(-10500000, 2600000, "radar inactive", col=linecol,cex = 4,pos=4)
+  points(c(-10700000,-10600000),c(2450000,2450000), col='yellow',type='l',lwd=2)
+  text(-10500000, 2450000, "solar terminator", col=linecol,cex = 4,pos=4)
+  
+  
+  # plot color scale legend
   image.plot(idw,
              col=col,
              zlim=zlim,
              #smallplot=c(0.014,0.024,0.12,.82), left aligntment
-             smallplot=c(0.05,0.4,0.15,0.165), # bottom allignment
+             smallplot=c(0.05,0.4,0.15-.05,0.165-0.05), # bottom allignment
              legend.only=TRUE,
              legend.shrink = 1,
              horizontal=T,
@@ -564,11 +586,10 @@ vps.idw=ipol.vplist(vps,log=T,method="krige",variogram=vgModel)
 attributes(vps.idw)$date=DATE
 # plot to file
 outputfile=paste(VPDIR,strftime(DATE,"/mosaic_%Y%m%d%H%M.jpg"),sep="")
-plotidw(vps.idw,main="mtr",bg="black",linecol="white",zlim=c(50,50000),file=outputfile,closedev=F,legend.lab="Migration traffic rate [thousands/km/h]",variogram=vgModel)
+outputfile="~/git/mosaic_aws/test.jpg"
+plotidw(vps.idw,bg="black",linecol="white",zlim=c(50,50000),file=outputfile,closedev=F,legend.lab="Migration traffic rate [thousands/km/h]",variogram=vgModel)
 add_barbs(vps)
-# add day-night terminator
-term=get_terminator(DATE)
-if(!is.null(term)) points(term@coords[,1],term@coords[,2],col='yellow',type='l',lwd=2)
+
 garbage=dev.off()
 
 ##########################################################
