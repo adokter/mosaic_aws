@@ -194,7 +194,7 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
   points(-10600000,2600000,col='red',cex=1.5,pch=16)
   text(-10500000, 2750000, "radar active", col=linecol,cex = 4,pos=4)
   text(-10500000, 2600000, "radar inactive", col=linecol,cex = 4,pos=4)
-  points(c(-10700000,-10600000),c(2450000,2450000), col='yellow',type='l',lwd=2)
+  points(c(-10800000,-10600000),c(2450000,2450000), col='yellow',type='l',lwd=2)
   text(-10500000, 2450000, "solar terminator", col=linecol,cex = 4,pos=4)
   
   
