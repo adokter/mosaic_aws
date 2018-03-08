@@ -51,6 +51,7 @@ suppressMessages(suppressWarnings(library(dplyr,quietly = T)))
 library(geosphere,quietly = T)
 library(gstat, quietly = T)
 if(length(FIGDIR)==0){
+  # this is the default working directory on the EC2 instance
   setwd("/opt")
 }
 
@@ -125,7 +126,7 @@ ipol.vplist = function(vplist,alpha=NA,log=F,alt.min=0, alt.max=Inf,quantity="mt
 }
 
 plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, closedev=T, date.lab='auto',legend.lab="Migration traffic rate [birds/km/h]",col=evening.palette,...){
-  if(!is.na(file)) jpeg(file=file, width = 3.5, height = 2.5,units="in",res=300,quality=90)
+  if(!is.na(file)) jpeg(file=file, width = 2400, height = 1350,units="px",quality=90)
   if(attributes(idw)$log){
     axislabels=c(0.05,0.5,2,10,50)
     axisticks=log10(1000*axislabels)
@@ -135,28 +136,28 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
     axislabels=zlim
     axisticks=axislabels
   }
-
+  
   bg.start=par()$bg
   fg.start=par()$fg
-  par(bg=bg,fg=linecol,col.axis=linecol,col.lab=linecol,col.main=linecol,col.sub=linecol,cex=.1)
+  par(bg=bg,fg=linecol,col.axis=linecol,col.lab=linecol,col.main=linecol,col.sub=linecol,cex=.25)
   idw@data$var1.pred[idw$var1.pred < zlim[1]]=zlim[1]
   idw@data$var1.pred[idw$var1.pred > zlim[2]]=zlim[2]
   #plot(idw[idw.idx,],add.axis=T,axis.pos=1,scale.shrink=1,zlim=zlim, bg=bg, ...)
   plot(idw[idw.idx,],what="image",zlim=zlim, bg=bg, col=col, ...)
-  plot(lower48,add=T,border=linecol,lwd=0.3)
+  plot(lower48,add=T,border=linecol,lwd=2)
   #plot(cmtdata,add=T,col=linecol,lwd=0.1,pch='.')
-
+  
   usr <- par("usr")
   xwidth <- usr[2] - usr[1]
   yheight <- usr[4] - usr[3]
-
+  
   # plot date
   if(date.lab=='auto') date.lab=attributes(idw)$date
   my.date.lab=tryCatch(format(date.lab,"%d %B %Y %H:%M EST", tz="EST"),error= function(err) {date.lab})
-  text(usr[1] + xwidth/26, usr[3] + yheight/6, my.date.lab, col=linecol,cex = 6, font=2,pos=4)
-
+  text(usr[1] + xwidth/36, usr[3] + yheight/5.5, my.date.lab, col=linecol,cex = 19, font=2,pos=4)
+  
   # plot low-medium-high label
-  text(usr[1] + xwidth/26, usr[3] + yheight/8, "                         low       medium       high", col=linecol,cex = 4,pos=4)
+  text(usr[1] + xwidth/26, usr[3] + yheight/7.5, "                         low       medium       high", col=linecol,cex = 15,pos=4)
   
   # plot logo
   if(!is.na(file)){
@@ -164,61 +165,60 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
                 usr[2] +usr[2]/5.5 - (((usr[3]) - (usr[3] - (yheight * 0.1)))*(res[2]/res[1])),
                 usr[3] + yheight/20, interpolate=FALSE,angle=180)
   }
-
+  
   # plot authorship
-  text(usr[1] + xwidth/1.25, usr[3] + yheight/10, "Adriaan M. Dokter, 2018", col=linecol,cex = 3,pos=4)
-    
-  bins=seq(zlim[1],zlim[2],length.out=length(col)+1)
-
-
-
+  text(usr[1] + xwidth/1.25, usr[3] + yheight/25 + 150000, "www.birdcast.info", col=linecol,cex = 12,pos=4)
+  text(usr[1] + xwidth/1.25, usr[3] + yheight/25, "Adriaan M. Dokter, 2018", col=linecol,cex = 12,pos=4)
+  
   # plot radar locations of active radars
-  plot(attributes(idw)$data.vp,add=T,col='green',cex=1.5,pch=16)
+  plot(attributes(idw)$data.vp,add=T,col='green',cex=8,pch=16)
   # also plot inactive radars
   radarsOffline=radarInfo[!(1:nrow(radarInfo) %in% as.numeric(rownames(attributes(idw)$data.vp@data))),]
   if(nrow(radarsOffline)>0){
     coordinates(radarsOffline)<-~lon+lat
     proj4string(radarsOffline)=proj4string(lower48wgs)
     radarsOffline=spTransform(radarsOffline, CRS("+proj=merc"))
-    plot(radarsOffline,add=T,col='red',cex=1.5,pch=16)
+    plot(radarsOffline,add=T,col='#EF3C3A',cex=8,pch=16)
   }
-
+  
   # add day-night terminator
   term=get_terminator(DATE)
   if(!is.null(term)){
-    points(term@coords[,1],term@coords[,2],col='yellow',type='l',lwd=2)
+    points(term@coords[,1],term@coords[,2],col='yellow',type='l',lwd=10)
   }
   
   # plot active / inactive radar legend
-  points(-10600000,2750000,col='green',cex=1.5,pch=16)
-  points(-10600000,2600000,col='red',cex=1.5,pch=16)
-  text(-10500000, 2750000, "radar active", col=linecol,cex = 4,pos=4)
-  text(-10500000, 2600000, "radar inactive", col=linecol,cex = 4,pos=4)
-  points(c(-10800000,-10600000),c(2450000,2450000), col='yellow',type='l',lwd=2)
-  text(-10500000, 2450000, "solar terminator", col=linecol,cex = 4,pos=4)
+  shift=0
+  xshift=250000
+  points(-10600000+xshift,3200000+shift,col='green',cex=6,pch=16)
+  points(-10600000+xshift,3050000+shift,col='#EF3C3A',cex=6,pch=16)
+  text(-10500000+xshift, 3200000+shift, "radar active", col=linecol,cex = 15,pos=4)
+  text(-10500000+xshift, 3050000+shift, "radar inactive", col=linecol,cex = 15,pos=4)
+  points(c(-10800000+xshift,-10600000+xshift),c(2900000+shift,2900000+shift), col='yellow',type='l',lwd=10)
+  text(-10500000+xshift, 2900000+shift, "solar terminator", col=linecol,cex = 15,pos=4)
   
   
   # plot color scale legend
+  bins=seq(zlim[1],zlim[2],length.out=length(col)+1)
   image.plot(idw,
              col=col,
              zlim=zlim,
              #smallplot=c(0.014,0.024,0.12,.82), left aligntment
-             smallplot=c(0.05,0.4,0.15-.05,0.165-0.05), # bottom allignment
+             smallplot=c(0.05-0.02,0.4-0.02,0.15-.05,0.165-0.05), # bottom allignment
              legend.only=TRUE,
              legend.shrink = 1,
              horizontal=T,
-             legend.width=2.5,
+             legend.width=1000,
              breaks=bins,
              axis.args=list(at=axisticks,fg=linecol, labels=axislabels,
                             col.axis=linecol,
-                            cex.axis=4,pos=1,mgp = c(0, 3, 0),
-                            lwd.ticks=2),
-             legend.args=list(text=legend.lab, side=1, cex=.4, col=linecol, line=8)
+                            cex.axis=12,pos=1,mgp = c(0, 10, 0),
+                            lwd.ticks=8),
+             legend.args=list(text=legend.lab, side=1, cex=4, col=linecol, line=24)
   )
   par(bg=bg.start,fg=fg.start,col.axis=fg.start,col.lab=fg.start,col.main=fg.start,col.sub=fg.start)
   if(!is.na(file) && closedev==T) dev.off()
 }
-
 
 plot_wind_barbs = function(cx, cy, direction = 0, speed = NA, arrow=F, fill = rep(0, length(cx)), circle = FALSE, cex = 1, lwd=0.5, col = "black")
 {
@@ -386,7 +386,7 @@ add_barbs=function(vplist,mtr.min=500,radar.col="white"){
   coordinates(barbdata)<-~lon+lat
   proj4string(barbdata)=proj4string(lower48wgs)
   barbdata=spTransform(barbdata, CRS("+proj=merc"))
-  plot_wind_barbs(barbdata@coords[,1],barbdata@coords[,2],180+barbdata$dd,3.5+0*barbdata$ff,col="#fca71d",cex=.35,lwd=0.75,arrow=T)
+  plot_wind_barbs(barbdata@coords[,1],barbdata@coords[,2],180+barbdata$dd,3.5+0*barbdata$ff,col="#fca71d",cex=4,lwd=8,arrow=T)
 }
 
 s3file=function(radar,date,bucket=BUCKET,prefix="output",dt=900){
@@ -529,13 +529,16 @@ get_terminator=function(date){
   data$lat2=data$lon
   data$lon=data$lon2
   data$lat=data$lat2
-  data=data %>% filter(lat >= 29.5 & lat <= 49 & lon > -150 & lon < -49)
+  data=data %>% filter(lat >= 20 & lat <= 55 & lon > -150 & lon < -49)
   if(!nrow(data)>2) return(NULL)
   coordinates(data)<-~lon+lat
   proj4string(data)=proj4string(lower48wgs)
   # convert to mercator projection
   data=spTransform(data, CRS("+proj=merc"))
-  data
+  # return only points within US:
+  over48=over(data,lower48)
+  if(!nrow(over48)>2) return(NULL)
+  data[which(over48$admin=="United States of America"),]
 }
 
 ##########################################################
@@ -586,11 +589,13 @@ vps.idw=ipol.vplist(vps,log=T,method="krige",variogram=vgModel)
 attributes(vps.idw)$date=DATE
 # plot to file
 outputfile=paste(VPDIR,strftime(DATE,"/mosaic_%Y%m%d%H%M.jpg"),sep="")
-outputfile="~/git/mosaic_aws/test.jpg"
+
+outputfile="/home/adriaan/git/"
 plotidw(vps.idw,bg="black",linecol="white",zlim=c(50,50000),file=outputfile,closedev=F,legend.lab="Migration traffic rate [thousands/km/h]",variogram=vgModel)
 add_barbs(vps)
-
 garbage=dev.off()
+garbage
+outputfile
 
 ##########################################################
 #  upload to S3
