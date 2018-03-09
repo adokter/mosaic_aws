@@ -589,13 +589,9 @@ vps.idw=ipol.vplist(vps,log=T,method="krige",variogram=vgModel)
 attributes(vps.idw)$date=DATE
 # plot to file
 outputfile=paste(VPDIR,strftime(DATE,"/mosaic_%Y%m%d%H%M.jpg"),sep="")
-
-outputfile="/home/adriaan/git/"
 plotidw(vps.idw,bg="black",linecol="white",zlim=c(50,50000),file=outputfile,closedev=F,legend.lab="Migration traffic rate [thousands/km/h]",variogram=vgModel)
 add_barbs(vps)
 garbage=dev.off()
-garbage
-outputfile
 
 ##########################################################
 #  upload to S3
