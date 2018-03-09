@@ -190,8 +190,8 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
   # plot active / inactive radar legend
   shift=0
   xshift=250000
-  points(-10600000+xshift,3200000+shift,col='green',cex=6,pch=16)
-  points(-10600000+xshift,3050000+shift,col='#EF3C3A',cex=6,pch=16)
+  points(-10600000+xshift,3200000+shift,col='green',cex=8,pch=16)
+  points(-10600000+xshift,3050000+shift,col='#EF3C3A',cex=8,pch=16)
   text(-10500000+xshift, 3200000+shift, "radar active", col=linecol,cex = 15,pos=4)
   text(-10500000+xshift, 3050000+shift, "radar inactive", col=linecol,cex = 15,pos=4)
   points(c(-10800000+xshift,-10600000+xshift),c(2900000+shift,2900000+shift), col='yellow',type='l',lwd=10)
