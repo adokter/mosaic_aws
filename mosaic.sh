@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # do some selection on date
-DATE=`date --date="20 minutes ago" +"%Y-%m-%d %H:%M"`
+DATE=`date --date="15 minutes ago" +"%Y-%m-%d %H:%M"`
 
 ID=`sed -n 2p ~/.aws/credentials | awk '{print $3}'`
 KEY=`sed -n 3p ~/.aws/credentials | awk '{print $3}'`
