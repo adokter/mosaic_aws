@@ -6,8 +6,9 @@ args = commandArgs(trailingOnly=TRUE)
 ##########################################################
 
 if("--help" %in% args){
-  cat("mosaic_aws.R [--help] [--suppress-aws-uploads] [--outputdir=<directory>] [--date=<UTC date>]\n")
+  cat("mosaic_aws.R [--help] [--bucket=<S3 bucket>] [--suppress-aws-uploads] [--outputdir=<directory>] [--date=<UTC date>]\n")
   cat("   --help                     print this help screen\n")
+  cat("   --bucket=<S3 bucket name>  bucket to store imager [default vol2bird]\n")
   cat("   --suppress_uploads         do not store generated imagery in Amazon S3\n")
   cat("   --outputdir=<dir>          optional directory for storing generated imagery\n")
   cat("   --date=<date>              force processing this UTC date\n")
@@ -22,6 +23,14 @@ cat("SCRIPT: ","uploading imagery to S3:",S3UPLOAD,'\n')
 FIGDIR=args[grep("--outputdir=*",args)]
 FIGDIR=sub("--outputdir=","",FIGDIR)
 if(length(FIGDIR)!=0) if(!file.exists(FIGDIR)) stop("outputdir not found")
+
+# S3 bucket where profiles and imagery are stored
+BUCKET=args[grep("--bucket=*",args)]
+BUCKET=sub("--bucket=","",BUCKET)
+if(length(BUCKET)==0 || BUCKET==""){
+  cat("SCRIPT: WARNING: no bucketname specified, defaulting to 'vol2bird' bucket\n")
+  BUCKET="vol2bird"
+}
 
 # get forced date if specified
 DATEFORCED=args[grep("--date=*",args)]
@@ -50,6 +59,8 @@ library(aws.s3,quietly = T)
 suppressMessages(suppressWarnings(library(dplyr,quietly = T)))
 library(geosphere,quietly = T)
 library(gstat, quietly = T)
+library(dplyr)
+library(tidyr)
 if(length(FIGDIR)==0){
   # this is the default working directory on the EC2 instance
   setwd("/opt")
@@ -57,13 +68,11 @@ if(length(FIGDIR)==0){
 
 Sys.setenv(TZ="UTC")
 
-# S3 bucket where profiles and imagery are stored
-BUCKET="vol2bird"
-
 if(file.exists("~/.aws/credentials")){
-  getkeys=function() read.csv("~/.aws/credentials",sep="=",stringsAsFactors = F,col.names = "key",strip.white=T)
-  Sys.setenv(AWS_ACCESS_KEY_ID=getkeys()["aws_access_key_id",])
-  Sys.setenv(AWS_SECRET_ACCESS_KEY=getkeys()["aws_secret_access_key",])
+  getkeys=function() read.csv("~/.aws/credentials",stringsAsFactors = F,col.names = "key",strip.white=T) %>% filter(grepl("=",key)) %>% separate(col="key",sep=" = ",into=c("id","key"))
+
+  Sys.setenv(AWS_ACCESS_KEY_ID=getkeys() %>% filter(id=="aws_access_key_id") %>% pull("key") %>% first())
+  Sys.setenv(AWS_SECRET_ACCESS_KEY=getkeys() %>% filter(id=="aws_secret_access_key") %>% pull("key") %>% first())
 }
 
 # run below lines when testing locally:
