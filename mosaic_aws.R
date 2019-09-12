@@ -10,6 +10,8 @@ if("--help" %in% args){
   cat("   --help                     print this help screen\n")
   cat("   --bucket=<S3 bucket name>  bucket to store imager [default vol2bird]\n")
   cat("   --suppress_uploads         do not store generated imagery in Amazon S3\n")
+  cat("   --suppress_arrows          do not plot directional arrows\n")
+  cat("   --suppress_terminator      do not plot sunset/sunrise terminator\n")
   cat("   --outputdir=<dir>          optional directory for storing generated imagery\n")
   cat("   --date=<date>              force processing this UTC date\n")
   quit()
@@ -39,6 +41,14 @@ if(length(DATEFORCED)!=0){
   d <- try( as.Date(DATEFORCED, format= "%Y-%m-%d %H:%M" ) )
   if( class( d ) == "try-error" || is.na( d ) ) stop("date not in 'YYYY-mm-dd HH:MM' format")
 }
+
+# determine whether we will plot arrows
+PLOTARROWS = !("--suppress_arrows" %in% args)
+cat("SCRIPT: ","plotting speed arrows:",PLOTARROWS,'\n')
+
+# determine whether we will plot arrows
+PLOTTERMINATOR = !("--suppress_terminator" %in% args)
+cat("SCRIPT: ","plotting sunset/sunrise terminator:",PLOTTERMINATOR,'\n')
 
 # make temporary folder for downloading vp data
 VPDIR=paste(tempdir(),"/vp",sep="")
@@ -191,9 +201,11 @@ plotidw <- function(idw,zlim=c(3.5,6), linecol="black",bg="white", file=NA, clos
   }
   
   # add day-night terminator
-  term=get_terminator(DATE)
-  if(!is.null(term)){
-    points(term@coords[,1],term@coords[,2],col='yellow',type='l',lwd=10)
+  if(PLOTTERMINATOR){
+    term=get_terminator(DATE)
+    if(!is.null(term)){
+      points(term@coords[,1],term@coords[,2],col='yellow',type='l',lwd=10)
+    }
   }
   
   # plot active / inactive radar legend
@@ -599,7 +611,9 @@ attributes(vps.idw)$date=DATE
 # plot to file
 outputfile=paste(VPDIR,strftime(DATE,"/mosaic_%Y%m%d%H%M.jpg"),sep="")
 plotidw(vps.idw,bg="black",linecol="white",zlim=c(50,50000),file=outputfile,closedev=F,legend.lab="Migration traffic rate [thousands/km/h]",variogram=vgModel)
-add_barbs(vps)
+if(PLOTARROWS){
+   add_barbs(vps)
+}
 garbage=dev.off()
 
 ##########################################################
